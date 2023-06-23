@@ -1,0 +1,174 @@
+setwd("C:/Users/vitiu/Desktop/Merit America/Databases/Case Study 1/CSV clean")
+#uploading data
+may_22_1 <- read.csv("202205-divvy-tripdata(1).csv")
+may_22_2 <- read.csv("202205-divvy-tripdata(2).csv")
+june_22_1 <- read.csv("202206-divvy-tripdata(1).csv")
+june_22_2 <- read.csv("202206-divvy-tripdata(2).csv")
+july_22_1 <- read.csv("202207-divvy-tripdata(1).csv")
+july_22_2 <- read.csv("202207-divvy-tripdata(2).csv")
+august_22_1 <- read.csv("202208-divvy-tripdata(1).csv")
+august_22_2 <- read.csv("202208-divvy-tripdata(2).csv")
+september_22_1 <- read.csv("202209-divvy-tripdata(1).csv")
+september_22_2 <- read.csv("202209-divvy-tripdata(2).csv")
+october_22_1 <- read.csv("202210-divvy-tripdata(1).csv")
+october_22_2 <- read.csv("202210-divvy-tripdata(2).csv")
+november_22 <- read.csv("202211-divvy-tripdata.csv")
+december_22 <- read.csv("202212-divvy-tripdata.csv")
+january_23 <- read.csv("202301-divvy-tripdata.csv")
+february_23 <- read.csv("202302-divvy-tripdata.csv")
+march_23 <- read.csv("202303-divvy-tripdata.csv")
+april_23_1 <- read.csv("202304-divvy-tripdata(1).csv")
+april_23_2 <- read.csv("202304-divvy-tripdata(2).csv")
+
+# comparing column names for my tables
+colnames(may_22_1)
+colnames(may_22_2)
+colnames(june_22_1)
+colnames(june_22_2)
+colnames(july_22_1)
+colnames(july_22_2)
+colnames(august_22_1)
+colnames(august_22_2)
+colnames(september_22_1)
+colnames(september_22_2)
+colnames(october_22_1)
+colnames(october_22_2)
+colnames(november_22)
+colnames(december_22)
+colnames(january_23)
+colnames(february_23)
+colnames(march_23)
+colnames(april_23_1)
+colnames(april_23_2)
+
+#inspect a little further
+str(may_22_1)
+str(may_22_2)
+str(june_22_1)
+str(june_22_2)
+str(july_22_1)
+str(july_22_2)
+str(august_22_1)
+str(august_22_2)
+str(september_22_1)
+str(september_22_2)
+str(october_22_1)
+str(october_22_2)
+str(november_22)
+str(december_22)
+str(january_23)
+str(february_23)
+str(march_23)
+str(april_23_1)
+str(april_23_2)
+
+# Now that I'm sure there are no inconsistencies, I will join my tables into one data frame
+
+all_trips <- bind_rows(may_22_1, may_22_2, june_22_1, june_22_2, july_22_1, july_22_2, august_22_1, august_22_2, september_22_1, september_22_2, october_22_1, october_22_2, november_22, december_22, january_23, february_23, march_23, april_23_1, april_23_2)
+# checking if it worked
+View(all_trips)
+# Removing latitude and longitude rows, because they are irrelevant for my analysis
+all_trips <- all_trips %>% 
+  select(-c(start_lat, start_lng, end_lat, end_lng))
+
+# Clean up data and prepare for analysis
+# Inspect the new table
+colnames(all_trips)  #List of column names
+nrow(all_trips)  #How many rows are in data frame?
+dim(all_trips)  #Dimensions of the data frame?
+head(all_trips)  #See the first 6 rows of data frame.  
+tail(all_trips) #See the last 6 rows of data frame.  
+str(all_trips)  #See list of columns and data types (numeric, character, etc)
+summary(all_trips)  #Statistical summary of data. Mainly for numerics
+# started_at, ended_at and ride_length columns are char type, I want to convert 
+# them to date and time, using dplyr and lubridate
+all_trips <- all_trips %>%
+  mutate(
+    ride_length = hms(ride_length),
+    started_at = ymd_hms(started_at),
+    ended_at = ymd_hms(ended_at)
+  )
+
+# Check which rows failed to convert
+failed_rows <- all_trips[is.na(all_trips$started_at) | is.na(all_trips$ended_at) | is.na(all_trips$ride_length), , drop = FALSE]
+# It appears that ride length in november and december did not calculate properly, let's fix that
+all_trips <- all_trips %>%
+  mutate(
+    ride_length = if_else(
+      is.na(ride_length),
+      as.duration(interval(started_at, ended_at)),
+      as.duration(ride_length)
+    )
+  )
+# Check if the ride_length column does not have negative values
+if (any(all_trips$ride_length < 0)) {
+  print("Negative values found in the ride_length column.")
+} else {
+  print("No negative values found in the ride_length column.")
+}
+# Remove negative values and create a second version of the data frame
+all_trips_v2 <- all_trips[!(all_trips$start_station_name == "HQ QR" | all_trips$ride_length<0),]
+# Check is that worked
+if (any(all_trips_v2$ride_length < 0)) {
+  print("Negative values found in the ride_length column.")
+} else {
+  print("No negative values found in the ride_length column.")
+}
+write.csv(all_trips_v2, "C:/Users/vitiu/Desktop/Merit America/Databases/Case Study 1/CSV clean/all_trips_v2.csv", row.names = FALSE)
+
+# Descriptive analysis on ride_length (all figures in seconds)
+summary(all_trips_v2$ride_length)
+
+# Compare members and casual users
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = mean)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = median)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = max)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = min)
+
+# See the average ride time by each day for members vs casual users
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+# Notice that the days of the week are out of order. Let's fix that.
+all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+# Now, let's run the average ride time by each day for members vs casual users
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+# Notice that the days of the week are out of order. Let's fix that.
+all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+# Now, let's run the average ride time by each day for members vs casual users
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+# analyze ridership data by type and weekday
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>%  #creates weekday field using wday()
+  group_by(member_casual, weekday) %>%  #groups by usertype and weekday
+  summarise(number_of_rides = n()							#calculates the number of rides and average duration 
+            ,average_duration = mean(ride_length)) %>% 		# calculates the average duration
+  arrange(member_casual, weekday)								# sorts
+
+# Let's visualize the number of rides by rider type
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge")
+
+# Let's create a visualization for average duration
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge")
+
+# Create a csv file that we will visualize in Excel, Tableau, or my presentation software
+counts <- aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+write.csv(counts, file = 'C:/Users/vitiu/Desktop/Merit America/Databases/Case Study 1/CSV clean/avg_ride_length.csv')
+
